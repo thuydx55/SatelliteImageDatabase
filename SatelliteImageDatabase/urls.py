@@ -17,5 +17,5 @@ urlpatterns = patterns('',
     # Uncomment the next line to enable the admin:
     url(r'^admin/', include(admin.site.urls)),
     url(r'^$', views.index, name='index'),
-    url(r'^download/(?P<result_id>\w+)/$', views.downloadImage, name='downloadImage')
+    url(r'^download/(?P<result_id>\w+)/(?P<band>\d+)/$', views.downloadImage, name='downloadImage')
 )

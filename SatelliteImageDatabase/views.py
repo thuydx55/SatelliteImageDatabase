@@ -10,32 +10,12 @@ from osgeo.gdalconst import *
 from models import *
 
 def index(request):
-	# path = os.path.abspath(os.path.join(os.path.dirname(__file__),"/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B1.TIF"))
-	# datafile = gdal.Open(path)
-	# cols = datafile.RasterXSize
-	# rows = datafile.RasterYSize
-	# bands = datafile.RasterCount
-
-	# geoinformation = datafile.GetGeoTransform()
-
-	# topLeftX = geoinformation[0]
-	# topLeftY = geoinformation[3]
-
-	# projInfo = datafile.GetProjection()
-	# spatialRef = osr.SpatialReference()
-
-	# spatialRef.ImportFromWkt(projInfo)
-	# spatialRefProj = spatialRef.ExportToProj4()
-
-	# return HttpResponse("md5: %s cols: %s, rows: %s, bands: %s, Top Left X: %s, Top Left Y: %s, WKT format: %s, Proj4 format: %s" % 
-	# 	(hashlib.md5(open(path).read()).hexdigest(), cols, rows, bands, topLeftX, topLeftY, spatialRef, spatialRefProj))
-	# return HttpResponse(ImageTile.objects.count())
 	response_dict = {}
 
 	if request.method == 'POST':
 		try:
-			startDate = datetime.datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
-			endDate = datetime.datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
+			startDate = datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
+			endDate = datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
 			ULPoint = map(float, request.POST['ul'].split(','))
 			URPoint = map(float, request.POST['ur'].split(','))
 			LLPoint = map(float, request.POST['ll'].split(','))
@@ -52,7 +32,9 @@ def index(request):
 		# response_dict.update({'tile_count': len(allTiles)})
 		return HttpResponse(json.dumps(response_dict), mimetype="application/json")
 
-def downloadImage(request, result_id):
+	raise Http404
+
+def downloadImage(request, result_id, band):
 	if request.method == 'GET':
 		resultImg = QueryResult.objects.filter(pk=result_id).first()
 		if resultImg == None:
@@ -60,15 +42,15 @@ def downloadImage(request, result_id):
 
 		tiles = list(resultImg.tileMatrix)
 
-		newfile = NamedTemporaryFile(suffix='.tif')
+		newfile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
 
 		firstTile, lastTile = tiles[0], tiles[len(tiles)-1]
 
 		xBlock = lastTile.indexTileX - firstTile.indexTileX + 1
 		yBlock = lastTile.indexTileY - firstTile.indexTileY + 1
 
-		finalXSize = firstTile.xSize * (xBlock-1) + lastTile.xSize
-		finalYSize = firstTile.ySize * (yBlock-1) + lastTile.ySize
+		finalXSize = firstTile.getXSize(band) * (xBlock-1) + lastTile.getXSize(band)
+		finalYSize = firstTile.getYSize(band) * (yBlock-1) + lastTile.getYSize(band)
 
 		gtiff = gdal.GetDriverByName('GTiff')
 
@@ -79,11 +61,12 @@ def downloadImage(request, result_id):
 				currentTile = tiles[x*yBlock+y]
 
 				output_dataset.GetRasterBand(1).WriteRaster( 
-					x*firstTile.xSize, 
-					y*firstTile.ySize, 
-					currentTile.xSize, 
-					currentTile.ySize, 
-					currentTile.tileRaster.raster )
+					x*firstTile.getXSize(band), 
+					y*firstTile.getYSize(band), 
+					currentTile.getXSize(band), 
+					currentTile.getYSize(band), 
+					getattr(currentTile, 'band%s' % band).raster)
+					# currentTile.bandRaster[int(band)].raster )
 
 		
 		wrapper = FileWrapper(newfile)
@@ -99,26 +82,19 @@ def saveImages(hostname, images, bands, polygon):
 
 	images_dict = []
 
-	allTiles = ImageTile.objects.filter(polygonBorder__geo_intersects=polygon)
-
 	for imageQuery in images:
-		imageBands = ImageBand.objects.filter(image=imageQuery, bandNumber__in=bands)
-		for imgBand in imageBands:
-			intersectTiles = allTiles.filter(band=imgBand).order_by('+indexTileX', '+indexTileY')
+		intersectTiles = ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=polygon).order_by('+indexTileX', '+indexTileY')
 
-			if intersectTiles.count() == 0:
-				continue
+		if intersectTiles.count() == 0:
+			continue
 
-			qr = QueryResult(tileMatrix = intersectTiles,
-							 imageName = imageQuery.name,
-							 imageBand = imgBand.bandNumber).save()
+		qr = QueryResult(tileMatrix = intersectTiles,
+						 imageName = imageQuery.name).save()
 
+		for i in bands:
 			query_dict = {}
-
 			query_dict.update({'image_name': imageQuery.name})
-			query_dict.update({'image_band': imgBand.bandNumber})
-			query_dict.update({'download_link': hostname + '/download/' + str(qr.id)})
-
+			query_dict.update({'download_link': hostname + '/download/' + str(qr.id) + '/' + str(i)})
 			images_dict.append(query_dict)
 
 	return images_dict

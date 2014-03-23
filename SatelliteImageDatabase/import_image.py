@@ -1,4 +1,4 @@
-import mongoengine, os, sys, datetime
+import mongoengine, os, sys, datetime, getopt
 
 from osgeo import gdal, osr
 from osgeo.gdalconst import *  
@@ -8,12 +8,9 @@ import struct
 gdal.UseExceptions()
 mongoengine.connect("SatelliteImageDatabase")
 
-block_size = 512
-
 models.ImageTile.drop_collection()
 models.ImageTileRaster.drop_collection()
 models.Image.drop_collection()
-models.ImageBand.drop_collection()
 
 def GetExtent(gt,cols,rows):
     ''' Return list of corner coordinates from a geotransform
@@ -58,91 +55,123 @@ def ReprojectCoords(coords,src_srs,tgt_srs):
         trans_coords.append([x,y])
     return trans_coords
 
-def importBand(bandNumber, imageModel):
+def importImage():
 
-    bandImage = models.ImageBand(bandNumber = bandNumber, image = imageModel).save()
+    img = models.Image(name = "LC80090652013101LGN01")
+    img.date = datetime.datetime.strptime("2013-06-04 02:24", "%Y-%m-%d %H:%M")
+    img.save()
 
-    path = os.path.abspath('/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % bandNumber)
-    ds=gdal.Open(path)
+    pointMatrix = []
+    blockMatrix = []
 
-    gt=ds.GetGeoTransform()
-    cols = ds.RasterXSize
-    rows = ds.RasterYSize
-    band = ds.GetRasterBand(1)
-    datatype = band.DataType  
-    ext=GetExtent(gt,cols,rows)
+    blockRows = 0
+    blockCols = 0
 
-    src_srs=osr.SpatialReference()
-    src_srs.ImportFromWkt(ds.GetProjection())
-    tgt_srs=osr.SpatialReference()
-    tgt_srs.ImportFromEPSG(4326)
-    tgt_srs = src_srs.CloneGeogCS()
+    for i in range(1, 12):
+        if i == 8:
+            block_size = 512*2
+        else:
+            block_size = 512
 
-    geo_ext=ReprojectCoords(ext,src_srs,tgt_srs)
+        path = os.path.abspath('/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        ds=gdal.Open(path)
 
-    pointTL, pointBL, pointBR, pointTR = geo_ext
+        gt=ds.GetGeoTransform()
+        cols = ds.RasterXSize
+        rows = ds.RasterYSize
+        band = ds.GetRasterBand(1)
+        datatype = band.DataType  
 
-    blockCols = int(cols / block_size) + 1
-    blockRows = int(rows / block_size) + 1
+        if i == 1:
+            ext=GetExtent(gt,cols,rows)
 
-    blockMatrix = [[]]
-    pointMatrix = [[]]
+            src_srs=osr.SpatialReference()
+            src_srs.ImportFromWkt(ds.GetProjection())
+            tgt_srs=osr.SpatialReference()
+            tgt_srs.ImportFromEPSG(4326)
+            tgt_srs = src_srs.CloneGeogCS()
 
-    lastBlockSizeX = cols - (blockCols-1)*block_size
-    lastBlockSizeY = rows - (blockRows-1)*block_size
+            geo_ext=ReprojectCoords(ext,src_srs,tgt_srs)
 
-    for y in range(0, blockRows+1):
-        pointMatrix.append([])
-        leftPoint = [(pointBL[0]*(y*block_size) + pointTL[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
-                        (pointBL[1]*(y*block_size) + pointTL[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
-        rightPoint = [(pointBR[0]*(y*block_size) + pointTR[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
-                        (pointBR[1]*(y*block_size) + pointTR[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
-        print '(%s %s)' % (leftPoint, rightPoint)
-        # save left point
-        pointMatrix[y].append(leftPoint)
-        for x in range(blockCols-1, -1, -1):
-            point = [(leftPoint[0]*(x*block_size) + rightPoint[0]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols,
-                        (leftPoint[1]*(x*block_size) + rightPoint[1]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols]
-            
-            pointMatrix[y].append(point)
-            point = None
-        # save right point
-        pointMatrix[y].append(rightPoint)
+            pointTL, pointBL, pointBR, pointTR = geo_ext
 
-        leftPoint = rightPoint = None
+            blockCols = int(cols / block_size) + 1
+            blockRows = int(rows / block_size) + 1
 
-    for y in range(0, blockRows):
-        for x in range(0, blockCols):
-            xSize = ySize = block_size
-            if (x == blockCols-1):
-                xSize = cols - x*block_size
-            if (y == blockRows-1):
-                ySize = rows - y*block_size
-            rasterString = band.ReadRaster(x*block_size, y*block_size, xSize, ySize, xSize, ySize, datatype)
-            # rasterString = struct.unpack(data_types[gdal.GetDataTypeName(band.DataType)]*xSize*ySize,rasterString)  
-            rasterTile = models.ImageTileRaster(raster = rasterString).save()
-            models.ImageTile(polygonBorder=[[pointMatrix[y][x],
-                                             pointMatrix[y+1][x], 
-                                             pointMatrix[y+1][x+1],
-                                             pointMatrix[y][x+1],
-                                             pointMatrix[y][x]]], 
-                            tileRaster = rasterTile,
-                            xSize = xSize, ySize = ySize,
-                            indexTileX = x, indexTileY = y,
-                            band = bandImage).save()
-            print "band: %i - add block [%i %i]" % (bandNumber, x, y)
-            rasterString = None
-            rasterTile = None
+            lastBlockSizeX = cols - (blockCols-1)*block_size
+            lastBlockSizeY = rows - (blockRows-1)*block_size
 
-    pointMatrix = None
-    allTiles = None
-    ds = None
+            for y in range(0, blockRows+1):
+                pointMatrix.append([])
+                leftPoint = [(pointBL[0]*(y*block_size) + pointTL[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
+                                (pointBL[1]*(y*block_size) + pointTL[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
+                rightPoint = [(pointBR[0]*(y*block_size) + pointTR[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
+                                (pointBR[1]*(y*block_size) + pointTR[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
+                print '(%s %s)' % (leftPoint, rightPoint)
+                # save left point
+                pointMatrix[y].append(leftPoint)
+                for x in range(blockCols-1, -1, -1):
+                    point = [(leftPoint[0]*(x*block_size) + rightPoint[0]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols,
+                                (leftPoint[1]*(x*block_size) + rightPoint[1]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols]
+                    
+                    pointMatrix[y].append(point)
+                    point = None
+                # save right point
+                pointMatrix[y].append(rightPoint)
 
-    return bandImage
+                leftPoint = rightPoint = None
 
-img = models.Image(name = "LC80090652013101LGN01")
-img.date = datetime.datetime.strptime("2013-06-04 02:24", "%Y-%m-%d %H:%M")
-img.save()
+            for y in range(0, blockRows):
+                blockMatrix.append([])
+                for x in range(0, blockCols):
+                    blockMatrix[y].append(models.ImageTile(indexTileX = x, indexTileY = y, image = img,
+                                 polygonBorder=[[pointMatrix[y][x],
+                                                 pointMatrix[y+1][x], 
+                                                 pointMatrix[y+1][x+1],
+                                                 pointMatrix[y][x+1],
+                                                 pointMatrix[y][x]]]).save())
+        for y in range(0, blockRows):
+            for x in range(0, blockCols):
 
-for i in range(1, 12):
-    importBand(i, img)
+                tileModel = blockMatrix[y][x]
+                xSize = ySize = block_size
+                if (x == blockCols-1):
+                    xSize = cols - x*block_size
+                if (y == blockRows-1):
+                    ySize = rows - y*block_size
+                rasterString = band.ReadRaster(x*block_size, y*block_size, xSize, ySize, xSize, ySize, datatype)
+                # rasterString = struct.unpack(data_types[gdal.GetDataTypeName(band.DataType)]*xSize*ySize,rasterString)  
+                setattr(tileModel, 'band%d' % i, models.ImageTileRaster(raster = rasterString).save())
+                tileModel.xSize = xSize
+                tileModel.ySize = ySize
+                tileModel.save()
+
+                print "band: %i - add block [%i %i]" % (i, x, y)
+                rasterString = None
+                rasterTile = None
+
+        ds = None
+
+importImage()
+
+# def main(argv):
+#     inputfile = ''
+#     outputfile = ''
+#     try:
+#         opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
+#     except getopt.GetoptError:
+#         print os.path.basename(__file__), ' -i <inputfile> -o <outputfile>'
+#         sys.exit(2)
+#     for opt, arg in opts:
+#         if opt == '-h':
+#             print os.path.basename(__file__), ' -i <inputfile> -o <outputfile>'
+#             sys.exit()
+#         elif opt in ("-i", "--ifile"):
+#             inputfile = arg
+#         elif opt in ("-o", "--ofile"):
+#             outputfile = arg
+#     print 'Input file is "', inputfile
+#     print 'Output file is "', outputfile
+
+# if __name__ == "__main__":
+#    main(sys.argv[1:])
