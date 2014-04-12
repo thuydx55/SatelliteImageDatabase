@@ -80,9 +80,15 @@ def importImage():
         cols = ds.RasterXSize
         rows = ds.RasterYSize
         band = ds.GetRasterBand(1)
-        datatype = band.DataType  
+        datatype = band.DataType
+        # img.projectionBand(update__field__)
 
         if i == 1:
+
+            # setattr(img, 'projectionBand', ds.GetProjection())
+            img.wkt = ds.GetProjection()
+            img.save()
+
             ext=GetExtent(gt,cols,rows)
 
             src_srs=osr.SpatialReference()
@@ -92,6 +98,8 @@ def importImage():
             tgt_srs = src_srs.CloneGeogCS()
 
             geo_ext=ReprojectCoords(ext,src_srs,tgt_srs)
+
+            
 
             pointTL, pointBL, pointBR, pointTR = geo_ext
 

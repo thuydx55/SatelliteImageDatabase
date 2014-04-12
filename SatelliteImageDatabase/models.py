@@ -6,6 +6,8 @@ class Image(Document):
 	date = DateTimeField()
 	# bands = ListField(ReferenceField(ImageBand))
 
+	wkt = StringField()
+
 	meta = {
 		'indexes': [
 			[('date', 1)]

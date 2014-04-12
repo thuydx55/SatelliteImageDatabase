@@ -27,7 +27,7 @@ def index(request):
 
 		imagesQuerySet = Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
-		images_dict = saveImages( request.META['HTTP_HOST'], imagesQuerySet, bands, [[ULPoint, URPoint, LRPoint, LLPoint, ULPoint]])
+		images_dict = queryImages(imagesQuerySet, bands, [[ULPoint, URPoint, LRPoint, LLPoint, ULPoint]])
 		response_dict.update({'images':images_dict})
 		# response_dict.update({'tile_count': len(allTiles)})
 		return HttpResponse(json.dumps(response_dict), mimetype="application/json")
@@ -56,29 +56,47 @@ def downloadImage(request, result_id, band):
 
 		output_dataset = gtiff.Create(newfile.name, finalXSize, finalYSize, 1, GDT_UInt16)
 
-		for y in range(0, yBlock):
-			for x in range(0, xBlock):
-				currentTile = tiles[x*yBlock+y]
+		# for y in range(0, yBlock):
+		# 	for x in range(0, xBlock):
+		# 		currentTile = tiles[x*yBlock+y]
 
-				output_dataset.GetRasterBand(1).WriteRaster( 
-					x*firstTile.getXSize(band), 
-					y*firstTile.getYSize(band), 
-					currentTile.getXSize(band), 
-					currentTile.getYSize(band), 
-					getattr(currentTile, 'band%s' % band).raster)
-					# currentTile.bandRaster[int(band)].raster )
-
+		# 		output_dataset.GetRasterBand(1).WriteRaster( 
+		# 			x*firstTile.getXSize(band), 
+		# 			y*firstTile.getYSize(band), 
+		# 			currentTile.getXSize(band), 
+		# 			currentTile.getYSize(band), 
+		# 			getattr(currentTile, 'band%s' % band).raster)
 		
-		wrapper = FileWrapper(newfile)
-		content_type = mimetypes.guess_type(newfile.name)[0]
-		response = HttpResponse(wrapper, mimetype='content_type')
-		response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
-		return response
+		# outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
+		# 					tiles[yBlock-1].polygonBorder['coordinates'][0][1],
+		# 					tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
+		# 					tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
 
-		# return HttpResponse(json.dumps(response_dict), mimetype="application/json")
+		src_srs=osr.SpatialReference()
+        src_srs.ImportFromWkt(tiles[0].image.wkt)
+        tgt_srs=osr.SpatialReference()
+        tgt_srs.ImportFromEPSG(4326)
+        tgt_srs = src_srs.CloneGeogCS()
+
+        # ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
+
+        return HttpResponse(json.dumps(dict(tile1=ReprojectCoords(tiles[0].polygonBorder['coordinates'][0], tgt_srs, src_srs), 
+        									tile2=ReprojectCoords(tiles[yBlock-1].polygonBorder['coordinates'][0], tgt_srs, src_srs),
+        									tile3=ReprojectCoords(tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0], tgt_srs, src_srs),
+        									tile4=ReprojectCoords(tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0], tgt_srs, src_srs))), mimetype="application/json")
 
 
-def saveImages(hostname, images, bands, polygon):
+		# wrapper = FileWrapper(newfile)
+		# content_type = mimetypes.guess_type(newfile.name)[0]
+		# response = HttpResponse(wrapper, mimetype='content_type')
+		# response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
+		
+		# return response
+
+	raise Http404
+
+
+def queryImages(images, bands, polygon):
 
 	images_dict = []
 
@@ -94,39 +112,27 @@ def saveImages(hostname, images, bands, polygon):
 		for i in bands:
 			query_dict = {}
 			query_dict.update({'image_name': imageQuery.name})
-			query_dict.update({'download_link': hostname + '/download/' + str(qr.id) + '/' + str(i)})
+			query_dict.update({'download_link': '/download/' + str(qr.id) + '/' + str(i)})
 			images_dict.append(query_dict)
 
 	return images_dict
 
 
-			# finalXSize = topLeftTile.xSize*(colBlock-1) + topRightTile.xSize
-			# finalYSize = topLeftTile.ySize*(rowBlock-1) + botLeftTile.ySize
-			# normalTileSizeX = topLeftTile.xSize
-			# normalTileSizeY = topLeftTile.ySize
+def ReprojectCoords(coords,src_srs,tgt_srs):
+    ''' Reproject a list of x,y coordinates.
 
-			# if finalXSize > finalYSize:
-			# 	factor = 150.0 / finalXSize
-			# else:
-			# 	factor = 150.0 / finalYSize
-
-			# # print '%i %i' % (finalXSize, finalYSize)
-			# filename = '%s-band%i.tif' % (imageQuery.name, band.bandNumber)
-			# # print 'Export file %s' % filename
-			# output_dataset = gtiff.Create(filename, int(finalXSize*factor), int(finalYSize*factor), 1, GDT_UInt16)
-			# currentTile = topLeftTile
-			# for i in range(0, rowBlock):
-			# 	tmpTile = currentTile
-			# 	for j in range(0, colBlock):
-			# 		# print '\tband %i [%i %i]' % (band.bandNumber, i, j)
-			# 		output_dataset.GetRasterBand(1).WriteRaster( 
-			# 			int(j*normalTileSizeX*factor), 
-			# 			int(i*normalTileSizeY*factor), 
-			# 			int(currentTile.xSize*factor), 
-			# 			int(currentTile.ySize*factor), 
-			# 			currentTile.tileRaster.raster)
-			# 		currentTile = currentTile.rightTile
-			# 	currentTile = tmpTile.downTile
-
-			# output_dataset = None
-
+        @type geom:     C{tuple/list}
+        @param geom:    List of [[x,y],...[x,y]] coordinates
+        @type src_srs:  C{osr.SpatialReference}
+        @param src_srs: OSR SpatialReference object
+        @type tgt_srs:  C{osr.SpatialReference}
+        @param tgt_srs: OSR SpatialReference object
+        @rtype:         C{tuple/list}
+        @return:        List of transformed [[x,y],...[x,y]] coordinates
+    '''
+    trans_coords=[]
+    transform = osr.CoordinateTransformation( src_srs, tgt_srs)
+    for x,y in coords:
+        x,y,z = transform.TransformPoint(x,y)
+        trans_coords.append([x,y])
+    return trans_coords
