@@ -67,10 +67,10 @@ def downloadImage(request, result_id, band):
 		# 			currentTile.getYSize(band), 
 		# 			getattr(currentTile, 'band%s' % band).raster)
 		
-		# outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
-		# 					tiles[yBlock-1].polygonBorder['coordinates'][0][1],
-		# 					tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
-		# 					tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
+		outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
+							tiles[yBlock-1].polygonBorder['coordinates'][0][1],
+							tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
+							tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
 
 		src_srs=osr.SpatialReference()
         src_srs.ImportFromWkt(tiles[0].image.wkt)
@@ -78,13 +78,9 @@ def downloadImage(request, result_id, band):
         tgt_srs.ImportFromEPSG(4326)
         tgt_srs = src_srs.CloneGeogCS()
 
-        # ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
-
-        return HttpResponse(json.dumps(dict(tile1=ReprojectCoords(tiles[0].polygonBorder['coordinates'][0], tgt_srs, src_srs), 
-        									tile2=ReprojectCoords(tiles[yBlock-1].polygonBorder['coordinates'][0], tgt_srs, src_srs),
-        									tile3=ReprojectCoords(tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0], tgt_srs, src_srs),
-        									tile4=ReprojectCoords(tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0], tgt_srs, src_srs))), mimetype="application/json")
-
+        ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
+        return HttpResponse(json.dumps(ext))
+		
 
 		# wrapper = FileWrapper(newfile)
 		# content_type = mimetypes.guess_type(newfile.name)[0]
