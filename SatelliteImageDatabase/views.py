@@ -91,17 +91,17 @@ def downloadImage(request, result_id, band):
         ds.SetGeoTransform(output_geo_transform)
         ds.SetProjection(src_srs.ExportToWkt())
  
-        wrapper = FileWrapper(newfile)
-        content_type = mimetypes.guess_type(newfile.name)[0]
-        response = HttpResponse(wrapper, mimetype='content_type')
-        response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
+        # wrapper = FileWrapper(newfile)
+        # content_type = mimetypes.guess_type(newfile.name)[0]
+        # response = HttpResponse(wrapper, mimetype='content_type')
+        # response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
 
-        return response
+        # return response
 
-        # return HttpResponse(json.dumps(dict(out=output_geo_transform,
-        # 	ext=ext,
-        # 	finalXSize=finalXSize,
-        # 	finalYSize=finalYSize)))
+        return HttpResponse(json.dumps(dict(out=output_geo_transform,
+        	ext=ext,
+        	finalXSize=finalXSize,
+        	finalYSize=finalYSize)))
 		
 
 

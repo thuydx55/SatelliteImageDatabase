@@ -73,7 +73,7 @@ def importImage():
         else:
             block_size = 512
 
-        path = os.path.abspath('/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        path = os.path.abspath('/Volumes/Source/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
         ds=gdal.Open(path)
 
         gt=ds.GetGeoTransform()
@@ -166,13 +166,13 @@ def importImage():
                 TL = [TL[0], TL[1]]
 
                 BL = transform.TransformPoint(
-                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+ySize-1-0.5)*gt[2],
-                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+ySize-1-0.5)*gt[5])
+                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
+                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
                 BL = [BL[0], BL[1]]
 
                 BR = transform.TransformPoint(
-                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+ySize-1-0.5)*gt[2],
-                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+ySize-1-0.5)*gt[5])
+                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
+                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
                 BR = [BR[0], BR[1]]
 
                 TR = transform.TransformPoint(
