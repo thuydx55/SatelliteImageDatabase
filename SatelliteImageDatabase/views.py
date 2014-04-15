@@ -85,7 +85,7 @@ def downloadImage(request, result_id, band):
 
         origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
 
-        output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], yPix, 0]
+        output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
 
         ds = gdal.Open(newfile.name, gdal.GA_Update)
         ds.SetGeoTransform(output_geo_transform)
