@@ -17,6 +17,11 @@ class Image(Document):
 class ImageTileRaster(Document):
 	raster = BinaryField()	
 
+class ImageBand(Document):
+	rasterData = ReferenceField(ImageTileRaster)
+	xResolution = FloatField()
+	yResolution = FloatField()
+
 class ImageTile(Document):
 	polygonBorder = PolygonField()
 	xSize = IntField()
@@ -27,17 +32,17 @@ class ImageTile(Document):
 
 	image = ReferenceField(Image)
 
-	band1 = ReferenceField(ImageTileRaster)
-	band2 = ReferenceField(ImageTileRaster)
-	band3 = ReferenceField(ImageTileRaster)
-	band4 = ReferenceField(ImageTileRaster)
-	band5 = ReferenceField(ImageTileRaster)
-	band6 = ReferenceField(ImageTileRaster)
-	band7 = ReferenceField(ImageTileRaster)
-	band8 = ReferenceField(ImageTileRaster)
-	band9 = ReferenceField(ImageTileRaster)
-	band10 = ReferenceField(ImageTileRaster)
-	band11 = ReferenceField(ImageTileRaster)
+	band1 = ReferenceField(ImageBand)
+	band2 = ReferenceField(ImageBand)
+	band3 = ReferenceField(ImageBand)
+	band4 = ReferenceField(ImageBand)
+	band5 = ReferenceField(ImageBand)
+	band6 = ReferenceField(ImageBand)
+	band7 = ReferenceField(ImageBand)
+	band8 = ReferenceField(ImageBand)
+	band9 = ReferenceField(ImageBand)
+	band10 = ReferenceField(ImageBand)
+	band11 = ReferenceField(ImageBand)
 
 	def getXSize(self, band):
 		if band == 8:

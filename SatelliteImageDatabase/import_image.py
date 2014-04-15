@@ -154,11 +154,12 @@ def importImage():
                     xSize = cols - x*block_size
                 if (y == blockRows-1):
                     ySize = rows - y*block_size
-                xSize -= 1
-                ySize -= 1
                 rasterString = band.ReadRaster(x*block_size, y*block_size, xSize, ySize, xSize, ySize, datatype)
+                ib = models.ImageBand(rasterData=models.ImageTileRaster(raster = rasterString).save(),
+                                        xResolution=gt[1],
+                                        yResolution=gt[4]).save()
                 # rasterString = struct.unpack(data_types[gdal.GetDataTypeName(band.DataType)]*xSize*ySize,rasterString)  
-                setattr(tileModel, 'band%d' % i, models.ImageTileRaster(raster = rasterString).save())
+                setattr(tileModel, 'band%d' % i, ib)
                 tileModel.xSize = xSize
                 tileModel.ySize = ySize
 
@@ -168,18 +169,18 @@ def importImage():
                 TL = [TL[0], TL[1]]
 
                 BL = transform.TransformPoint(
-                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+ySize-0.5)*gt[2],
-                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+ySize-0.5)*gt[5])
+                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+ySize-1-0.5)*gt[2],
+                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+ySize-1-0.5)*gt[5])
                 BL = [BL[0], BL[1]]
 
                 BR = transform.TransformPoint(
-                        gt[0] + (x*block_size+xSize+0.5)*gt[1] + (y*block_size+ySize-0.5)*gt[2],
-                        gt[3] + (x*block_size+xSize+0.5)*gt[4] + (y*block_size+ySize-0.5)*gt[5])
+                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+ySize-1-0.5)*gt[2],
+                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+ySize-1-0.5)*gt[5])
                 BR = [BR[0], BR[1]]
 
                 TR = transform.TransformPoint(
-                        gt[0] + (x*block_size+xSize+0.5)*gt[1] + (y*block_size+0.5)*gt[2],
-                        gt[3] + (x*block_size+xSize+0.5)*gt[4] + (y*block_size+0.5)*gt[5])
+                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+0.5)*gt[2],
+                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+0.5)*gt[5])
                 TR = [TR[0], TR[1]]
 
                 tileModel.polygonBorder = [[TL, BL, BR, TR, TL]]

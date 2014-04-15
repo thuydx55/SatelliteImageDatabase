@@ -52,6 +52,13 @@ def downloadImage(request, result_id, band):
 		finalXSize = firstTile.getXSize(band) * (xBlock-1) + lastTile.getXSize(band)
 		finalYSize = firstTile.getYSize(band) * (yBlock-1) + lastTile.getYSize(band)
 
+		# return HttpResponse(json.dumps(dict(
+		# 	fxSize=firstTile.getXSize(band),
+		# 	fySize=firstTile.getYSize(band),
+		# 	lxSize=lastTile.getYSize(band),
+		# 	lySize=lastTile.getYSize(band)
+		# 	)))
+
 		gtiff = gdal.GetDriverByName('GTiff')
 
 		output_dataset = gtiff.Create(newfile.name, finalXSize, finalYSize, 1, GDT_UInt16)
@@ -65,7 +72,7 @@ def downloadImage(request, result_id, band):
 		# 			y*firstTile.getYSize(band), 
 		# 			currentTile.getXSize(band), 
 		# 			currentTile.getYSize(band), 
-		# 			getattr(currentTile, 'band%s' % band).raster)
+		# 			getattr(currentTile, 'band%s' % band).rasterData.raster)
 		
 		outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
 							tiles[yBlock-1].polygonBorder['coordinates'][0][1],
@@ -79,15 +86,28 @@ def downloadImage(request, result_id, band):
         tgt_srs = src_srs.CloneGeogCS()
 
         ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
-        return HttpResponse(json.dumps(ext))
+
+        xPix = (round(ext[2][0])-round(ext[0][0]))/finalXSize
+        yPix = (round(ext[2][1])-round(ext[0][1]))/finalYSize
+
+        origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
+
+        output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], yPix, 0]
+        outputImageBorder.SetGeoTransform(output_geo_transform)
+
+		wrapper = FileWrapper(newfile)
+		content_type = mimetypes.guess_type(newfile.name)[0]
+		response = HttpResponse(wrapper, mimetype='content_type')
+		response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
+
+		return response
+
+        # return HttpResponse(json.dumps(dict(out=output_geo_transform,
+        # 	ext=ext,
+        # 	finalXSize=finalXSize,
+        # 	finalYSize=finalYSize)))
 		
 
-		# wrapper = FileWrapper(newfile)
-		# content_type = mimetypes.guess_type(newfile.name)[0]
-		# response = HttpResponse(wrapper, mimetype='content_type')
-		# response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
-		
-		# return response
 
 	raise Http404
 
