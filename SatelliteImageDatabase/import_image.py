@@ -155,11 +155,8 @@ def importImage():
                 if (y == blockRows-1):
                     ySize = rows - y*block_size
                 rasterString = band.ReadRaster(x*block_size, y*block_size, xSize, ySize, xSize, ySize, datatype)
-                ib = models.ImageBand(rasterData=models.ImageTileRaster(raster = rasterString).save(),
-                                        xResolution=gt[1],
-                                        yResolution=gt[4]).save()
                 # rasterString = struct.unpack(data_types[gdal.GetDataTypeName(band.DataType)]*xSize*ySize,rasterString)  
-                setattr(tileModel, 'band%d' % i, ib)
+                setattr(tileModel, 'band%d' % i, models.ImageTileRaster(raster = rasterString).save())
                 tileModel.xSize = xSize
                 tileModel.ySize = ySize
 

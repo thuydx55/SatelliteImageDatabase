@@ -52,27 +52,20 @@ def downloadImage(request, result_id, band):
 		finalXSize = firstTile.getXSize(band) * (xBlock-1) + lastTile.getXSize(band)
 		finalYSize = firstTile.getYSize(band) * (yBlock-1) + lastTile.getYSize(band)
 
-		# return HttpResponse(json.dumps(dict(
-		# 	fxSize=firstTile.getXSize(band),
-		# 	fySize=firstTile.getYSize(band),
-		# 	lxSize=lastTile.getYSize(band),
-		# 	lySize=lastTile.getYSize(band)
-		# 	)))
-
 		gtiff = gdal.GetDriverByName('GTiff')
 
 		output_dataset = gtiff.Create(newfile.name, finalXSize, finalYSize, 1, GDT_UInt16)
 
-		# for y in range(0, yBlock):
-		# 	for x in range(0, xBlock):
-		# 		currentTile = tiles[x*yBlock+y]
+		for y in range(0, yBlock):
+			for x in range(0, xBlock):
+				currentTile = tiles[x*yBlock+y]
 
-		# 		output_dataset.GetRasterBand(1).WriteRaster( 
-		# 			x*firstTile.getXSize(band), 
-		# 			y*firstTile.getYSize(band), 
-		# 			currentTile.getXSize(band), 
-		# 			currentTile.getYSize(band), 
-		# 			getattr(currentTile, 'band%s' % band).rasterData.raster)
+				output_dataset.GetRasterBand(1).WriteRaster( 
+					x*firstTile.getXSize(band), 
+					y*firstTile.getYSize(band), 
+					currentTile.getXSize(band), 
+					currentTile.getYSize(band), 
+					getattr(currentTile, 'band%s' % band).raster)
 		
 		outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
 							tiles[yBlock-1].polygonBorder['coordinates'][0][1],
@@ -93,14 +86,17 @@ def downloadImage(request, result_id, band):
         origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
 
         output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], yPix, 0]
-        outputImageBorder.SetGeoTransform(output_geo_transform)
 
-		wrapper = FileWrapper(newfile)
-		content_type = mimetypes.guess_type(newfile.name)[0]
-		response = HttpResponse(wrapper, mimetype='content_type')
-		response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
+        ds = gdal.Open(newfile.name, gdal.GA_Update)
+        ds.SetGeoTransform(output_geo_transform)
+        ds.SetProjection(src_srs.ExportToWkt())
+ 
+        wrapper = FileWrapper(newfile)
+        content_type = mimetypes.guess_type(newfile.name)[0]
+        response = HttpResponse(wrapper, mimetype='content_type')
+        response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
 
-		return response
+        return response
 
         # return HttpResponse(json.dumps(dict(out=output_geo_transform,
         # 	ext=ext,
