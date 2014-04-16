@@ -28,21 +28,8 @@ def index(request):
 
 		imagesQuerySet = Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
-		ULx = LRx = inputPolygon[0][0]
-		ULy = LRy = inputPolygon[0][1]
-
-		for x, y in inputPolygon:
-			if x > LRx:
-				LRx = x
-			if x < ULx:
-				ULx = x
-			if y > ULy:
-				ULy = y
-			if y < LRy:
-				LRy = y
-
-		query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
-		images_dict = queryImages(imagesQuerySet, bands, [query_polygon])
+		
+		images_dict = queryImages(imagesQuerySet, bands, inputPolygon)
 		response_dict.update({'images':images_dict})
 
 		# response_dict.update({'tile_count': len(allTiles)})
@@ -124,18 +111,36 @@ def downloadImage(request, result_id, band):
 	raise Http404
 
 
-def queryImages(images, bands, polygon):
+def queryImages(images, bands, inputPolygon):
+
+	ULx = LRx = inputPolygon[0][0]
+	ULy = LRy = inputPolygon[0][1]
+
+	for x, y in inputPolygon:
+		if x > LRx:
+			LRx = x
+		if x < ULx:
+			ULx = x
+		if y > ULy:
+			ULy = y
+		if y < LRy:
+			LRy = y
+	query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
+
+	if inputPolygon[0] != inputPolygon[len(inputPolygon)-1]:
+		inputPolygon.append(inputPolygon[0])
 
 	images_dict = []
 
 	for imageQuery in images:
-		intersectTiles = ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=polygon).order_by('+indexTileX', '+indexTileY')
+		intersectTiles = ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[query_polygon]).order_by('+indexTileX', '+indexTileY')
 
 		if intersectTiles.count() == 0:
 			continue
 
 		qr = QueryResult(tileMatrix = intersectTiles,
-						 imageName = imageQuery.name).save()
+						 imageName = imageQuery.name,
+						 inputPolygon=[inputPolygon]).save()
 
 		for i in bands:
 			query_dict = {}
