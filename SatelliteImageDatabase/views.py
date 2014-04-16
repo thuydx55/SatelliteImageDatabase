@@ -20,9 +20,7 @@ def index(request):
 			# URPoint = map(float, request.POST['ur'].split(','))
 			# LLPoint = map(float, request.POST['ll'].split(','))
 			# LRPoint = map(float, request.POST['lr'].split(','))
-			polygon = eval(request.POST['polygon'])
-			if polygon[0] != polygon[len(polygon)-1]:
-				polygon.append(polygon[0])
+			inputPolygon = eval(request.POST['polygon'])
 			bands = map(int, request.POST['bands'].split(','))
 		except Exception, e:
 			response_dict.update({'error': str(e)})
@@ -30,10 +28,25 @@ def index(request):
 
 		imagesQuerySet = Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
-		images_dict = queryImages(imagesQuerySet, bands, [polygon])
+		ULx = LRx = inputPolygon[0][0]
+		ULy = LRy = inputPolygon[0][1]
+
+		for x, y in inputPolygon:
+			if x > LRx:
+				LRx = x
+			if x < ULx:
+				ULx = x
+			if y > ULy:
+				ULy = y
+			if y < LRy:
+				LRy = y
+
+		query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
+		images_dict = queryImages(imagesQuerySet, bands, [query_polygon])
 		response_dict.update({'images':images_dict})
+
 		# response_dict.update({'tile_count': len(allTiles)})
-		return HttpResponse(json.dumps(response_dict), mimetype="application/json")
+		return HttpResponse(json.dumps(dict(images=images_dict)), mimetype="application/json")
 
 	raise Http404
 
