@@ -5,17 +5,20 @@ from django.core.files.temp import NamedTemporaryFile
 
 import hashlib
 import shutil, os, datetime, json, mimetypes, settings
-from osgeo import gdal, osr
+from osgeo import gdal, gdalnumeric, ogr, osr
+from PIL import Image, ImageDraw
 from osgeo.gdalconst import *  
-from models import *
+import models
+
+gdal.UseExceptions()
 
 def index(request):
 	response_dict = {}
 
 	if request.method == 'POST':
 		try:
-			startDate = datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
-			endDate = datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
+			startDate = datetime.datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
+			endDate = datetime.datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
 			# ULPoint = map(float, request.POST['ul'].split(','))
 			# URPoint = map(float, request.POST['ur'].split(','))
 			# LLPoint = map(float, request.POST['ll'].split(','))
@@ -26,7 +29,7 @@ def index(request):
 			response_dict.update({'error': str(e)})
 			return HttpResponse(json.dumps(response_dict), mimetype="application/json")
 
-		imagesQuerySet = Image.objects.filter(date__gt=startDate, date__lt=endDate)
+		imagesQuerySet = models.Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
 		
 		images_dict = queryImages(imagesQuerySet, bands, inputPolygon)
@@ -37,9 +40,49 @@ def index(request):
 
 	raise Http404
 
+def queryImages(images, bands, inputPolygon):
+
+	ULx = LRx = inputPolygon[0][0]
+	ULy = LRy = inputPolygon[0][1]
+
+	for x, y in inputPolygon:
+		if x > LRx:
+			LRx = x
+		if x < ULx:
+			ULx = x
+		if y > ULy:
+			ULy = y
+		if y < LRy:
+			LRy = y
+	query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
+
+	if inputPolygon[0] != inputPolygon[len(inputPolygon)-1]:
+		inputPolygon.append(inputPolygon[0])
+
+	images_dict = []
+
+	for imageQuery in images:
+		intersectTiles = models.ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[query_polygon]).order_by('+indexTileX', '+indexTileY')
+
+		if intersectTiles.count() == 0:
+			continue
+
+		qr = models.QueryResult(tileMatrix = intersectTiles,
+						 		imageName = imageQuery.name,
+						 		inputPolygon=[inputPolygon]).save()
+
+		for i in bands:
+			query_dict = {}
+			query_dict.update({'image_name': imageQuery.name})
+			query_dict.update({'download_link': '/download/' + str(qr.id) + '/' + str(i)})
+			images_dict.append(query_dict)
+
+	return images_dict
+
+
 def downloadImage(request, result_id, band):
 	if request.method == 'GET':
-		resultImg = QueryResult.objects.filter(pk=result_id).first()
+		resultImg = models.QueryResult.objects.filter(pk=result_id).first()
 		if resultImg == None:
 			raise Http404 
 
@@ -93,7 +136,47 @@ def downloadImage(request, result_id, band):
         ds = gdal.Open(newfile.name, gdal.GA_Update)
         ds.SetGeoTransform(output_geo_transform)
         ds.SetProjection(src_srs.ExportToWkt())
- 
+
+        # Clip Image
+        pixels = []
+        inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
+        for p in inputPolygonReprojected:
+  			pixels.append(world2Pixel(output_geo_transform, p[0], p[1]))
+
+        ULx = LRx = inputPolygonReprojected[0][0]
+        ULy = LRy = inputPolygonReprojected[0][1]
+
+        for x, y in inputPolygonReprojected:
+        	if x > LRx:
+        		LRx = x
+        	if x < ULx:
+        		ULx = x
+        	if y > ULy:
+        		ULy = y
+        	if y < LRy:
+        		LRy = y
+
+        ULx, ULy = world2Pixel(output_geo_transform, ULx, ULy)
+        LRx, LRy = world2Pixel(output_geo_transform, LRx, LRy)
+
+        clip = output_dataset.GetRasterBand(1).ReadAsArray(0, 0, finalXSize, finalYSize)[ULy:LRy, ULx:LRx]
+        
+        pxWidth = int(LRx - ULx)
+        pxHeight = int(LRy - ULy)
+
+        rasterPoly = Image.new("L", (pxWidth, pxHeight), 1)
+        rasterize = ImageDraw.Draw(rasterPoly)
+        rasterize.polygon(pixels, 0)
+
+        mask = imageToArray(rasterPoly)
+
+		# Clip the image using the mask
+        clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
+        
+        gdalnumeric.SaveArray(clip, "%s.tif" % 'output', format="GTiff")
+
+ 	
+ 		# Return HttpResponse Image
         wrapper = FileWrapper(newfile)
         content_type = mimetypes.guess_type(newfile.name)[0]
         response = HttpResponse(wrapper, mimetype='content_type')
@@ -109,46 +192,6 @@ def downloadImage(request, result_id, band):
 
 
 	raise Http404
-
-
-def queryImages(images, bands, inputPolygon):
-
-	ULx = LRx = inputPolygon[0][0]
-	ULy = LRy = inputPolygon[0][1]
-
-	for x, y in inputPolygon:
-		if x > LRx:
-			LRx = x
-		if x < ULx:
-			ULx = x
-		if y > ULy:
-			ULy = y
-		if y < LRy:
-			LRy = y
-	query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
-
-	if inputPolygon[0] != inputPolygon[len(inputPolygon)-1]:
-		inputPolygon.append(inputPolygon[0])
-
-	images_dict = []
-
-	for imageQuery in images:
-		intersectTiles = ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[query_polygon]).order_by('+indexTileX', '+indexTileY')
-
-		if intersectTiles.count() == 0:
-			continue
-
-		qr = QueryResult(tileMatrix = intersectTiles,
-						 imageName = imageQuery.name,
-						 inputPolygon=[inputPolygon]).save()
-
-		for i in bands:
-			query_dict = {}
-			query_dict.update({'image_name': imageQuery.name})
-			query_dict.update({'download_link': '/download/' + str(qr.id) + '/' + str(i)})
-			images_dict.append(query_dict)
-
-	return images_dict
 
 
 def ReprojectCoords(coords,src_srs,tgt_srs):
@@ -169,3 +212,27 @@ def ReprojectCoords(coords,src_srs,tgt_srs):
         x,y,z = transform.TransformPoint(x,y)
         trans_coords.append([x,y])
     return trans_coords
+
+def world2Pixel(geoMatrix, x, y):
+	"""
+	Uses a gdal geomatrix (gdal.GetGeoTransform()) to calculate
+	the pixel location of a geospatial coordinate 
+	"""
+	ulX = geoMatrix[0]
+	ulY = geoMatrix[3]
+	xDist = geoMatrix[1]
+	yDist = geoMatrix[5]
+	rtnX = geoMatrix[2]
+	rtnY = geoMatrix[4]
+	pixel = int((x - ulX) / xDist)
+	line = int((ulY - y) / xDist)
+	return (pixel, line) 
+
+def imageToArray(i):
+    """
+    Converts a Python Imaging Library array to a 
+    gdalnumeric image.
+    """
+    a=gdalnumeric.fromstring(i.tostring(),'b')
+    a.shape=i.im.size[1], i.im.size[0]
+    return a
