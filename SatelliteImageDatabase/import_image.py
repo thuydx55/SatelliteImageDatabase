@@ -73,7 +73,8 @@ def importImage():
         else:
             block_size = 512
 
-        path = os.path.abspath('/Volumes/Source/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        # path = os.path.abspath('/Volumes/Source/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        path = os.path.abspath('/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
         ds=gdal.Open(path)
 
         gt=ds.GetGeoTransform()

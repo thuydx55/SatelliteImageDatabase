@@ -16,10 +16,13 @@ def index(request):
 		try:
 			startDate = datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
 			endDate = datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
-			ULPoint = map(float, request.POST['ul'].split(','))
-			URPoint = map(float, request.POST['ur'].split(','))
-			LLPoint = map(float, request.POST['ll'].split(','))
-			LRPoint = map(float, request.POST['lr'].split(','))
+			# ULPoint = map(float, request.POST['ul'].split(','))
+			# URPoint = map(float, request.POST['ur'].split(','))
+			# LLPoint = map(float, request.POST['ll'].split(','))
+			# LRPoint = map(float, request.POST['lr'].split(','))
+			polygon = eval(request.POST['polygon'])
+			if polygon[0] != polygon[len(polygon)-1]:
+				polygon.append(polygon[0])
 			bands = map(int, request.POST['bands'].split(','))
 		except Exception, e:
 			response_dict.update({'error': str(e)})
@@ -27,7 +30,7 @@ def index(request):
 
 		imagesQuerySet = Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
-		images_dict = queryImages(imagesQuerySet, bands, [[ULPoint, URPoint, LRPoint, LLPoint, ULPoint]])
+		images_dict = queryImages(imagesQuerySet, bands, [polygon])
 		response_dict.update({'images':images_dict})
 		# response_dict.update({'tile_count': len(allTiles)})
 		return HttpResponse(json.dumps(response_dict), mimetype="application/json")
