@@ -6,7 +6,7 @@ import models
 import struct  
 
 gdal.UseExceptions()
-mongoengine.connect("SatelliteImageDatabase", host='10.10.19.3', port=27017)
+mongoengine.connect("SatelliteImageDatabase", host='localhost', port=27017)
 
 #models.ImageTile.drop_collection()
 #models.ImageTileRaster.drop_collection()
@@ -113,26 +113,6 @@ def importImage(filename, file_path):
             lastBlockSizeX = cols - (blockCols-1)*block_size
             lastBlockSizeY = rows - (blockRows-1)*block_size
 
-            # for y in range(0, blockRows+1):
-            #     pointMatrix.append([])
-            #     leftPoint = [(pointBL[0]*(y*block_size) + pointTL[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
-            #                     (pointBL[1]*(y*block_size) + pointTL[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
-            #     rightPoint = [(pointBR[0]*(y*block_size) + pointTR[0]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows,
-            #                     (pointBR[1]*(y*block_size) + pointTR[1]*((blockRows-1-y)*block_size+lastBlockSizeY))/rows]
-            #     print '(%s %s)' % (leftPoint, rightPoint)
-            #     # save left point
-            #     pointMatrix[y].append(leftPoint)
-            #     for x in range(blockCols-1, -1, -1):
-            #         point = [(leftPoint[0]*(x*block_size) + rightPoint[0]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols,
-            #                     (leftPoint[1]*(x*block_size) + rightPoint[1]*((blockCols-1-x)*block_size+lastBlockSizeX))/cols]
-                    
-            #         pointMatrix[y].append(point)
-            #         point = None
-            #     # save right point
-            #     pointMatrix[y].append(rightPoint)
-
-            #     leftPoint = rightPoint = None
-
             for y in range(0, blockRows):
                 blockMatrix.append([])
                 for x in range(0, blockCols):
@@ -229,6 +209,27 @@ for _file in files:
         pass
 
 log_file.close()
+
+# path = os.path.abspath('D:\_Dev\Images')
+# files  = os.listdir(path)
+# _file = files[0]
+
+# filename = os.path.splitext(_file)[0]
+# filename = os.path.splitext(filename)[0]
+
+# print 'Extract image %s' % os.path.join(path, _file)
+# archive = tarfile.open(os.path.join(path, _file))
+# archive.extractall(os.path.join(path, filename))
+
+# importImage(filename, os.path.join(path, filename))
+
+# print 'Remove extracted images'
+# for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
+#     for name in files:
+#         os.remove(os.path.join(root, name))
+#     for name in dirs:
+#         os.rmdir(os.path.join(root, name))
+# os.rmdir(os.path.join(path, filename))
 
 
 

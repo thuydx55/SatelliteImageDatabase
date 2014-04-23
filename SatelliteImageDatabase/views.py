@@ -133,10 +133,6 @@ def downloadImage(request, result_id, band):
 
         output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
 
-        ds = gdal.Open(str(newfile.name), gdal.GA_Update)
-        ds.SetGeoTransform(output_geo_transform)
-        ds.SetProjection(src_srs.ExportToWkt())
-
         # Clip Image
         pixels = []
         inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
@@ -173,14 +169,19 @@ def downloadImage(request, result_id, band):
 		# Clip the image using the mask
         clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
         
-        gdalnumeric.SaveArray(clip, "%s.tif" % 'output', format="GTiff")
+        finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
+        gdalnumeric.SaveArray(clip, finalFile.name , format="GTiff")
+        
+        ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
+        ds.SetGeoTransform(output_geo_transform)
+        ds.SetProjection(src_srs.ExportToWkt())
 
  	
  		# Return HttpResponse Image
-        wrapper = FileWrapper(newfile)
-        content_type = mimetypes.guess_type(newfile.name)[0]
+        wrapper = FileWrapper(finalFile)
+        content_type = mimetypes.guess_type(finalFile.name)[0]
         response = HttpResponse(wrapper, mimetype='content_type')
-        response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
+        response['Content-Disposition'] = "attachment; filename=%s" % finalFile.name
 
         return response
 
