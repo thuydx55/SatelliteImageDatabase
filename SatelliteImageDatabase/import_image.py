@@ -1,4 +1,4 @@
-import mongoengine, os, sys, datetime, getopt
+import mongoengine, os, sys, datetime, getopt, re, tarfile
 
 from osgeo import gdal, osr
 from osgeo.gdalconst import *  
@@ -6,11 +6,11 @@ import models
 import struct  
 
 gdal.UseExceptions()
-mongoengine.connect("SatelliteImageDatabase")
+mongoengine.connect("SatelliteImageDatabase", host='10.10.19.3', port=27017)
 
-models.ImageTile.drop_collection()
-models.ImageTileRaster.drop_collection()
-models.Image.drop_collection()
+#models.ImageTile.drop_collection()
+#models.ImageTileRaster.drop_collection()
+#models.Image.drop_collection()
 
 def GetExtent(gt,cols,rows):
     ''' Return list of corner coordinates from a geotransform
@@ -55,10 +55,14 @@ def ReprojectCoords(coords,src_srs,tgt_srs):
         trans_coords.append([x,y])
     return trans_coords
 
-def importImage():
+def importImage(filename, file_path):
 
-    img = models.Image(name = "LC80090652013101LGN01")
-    img.date = datetime.datetime.strptime("2013-06-04 02:24", "%Y-%m-%d %H:%M")
+    img = models.Image(name = filename)
+    r = re.search('L[COT]8\d{3}\d{3}(\d{4})(\d{3})\w{3}\d\d', filename)
+    year = int(r.group(1))
+    day_of_year = int(r.group(2))
+
+    img.date = datetime.date(year, 1, 1) + datetime.timedelta(day_of_year - 1)
     img.save()
 
     pointMatrix = []
@@ -74,7 +78,8 @@ def importImage():
             block_size = 512
 
         # path = os.path.abspath('/Volumes/Source/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
-        path = os.path.abspath('/host/_Dev/Images/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        # path = os.path.abspath('/home/rd320/Landsat8/LC80090652013101LGN01/LC80090652013101LGN01_B%i.TIF' % i)
+        path = os.path.join(file_path, filename+'_B%i.TIF' % i)
         ds=gdal.Open(path)
 
         gt=ds.GetGeoTransform()
@@ -157,7 +162,7 @@ def importImage():
                     ySize = rows - y*block_size
                 rasterString = band.ReadRaster(x*block_size, y*block_size, xSize, ySize, xSize, ySize, datatype)
                 # rasterString = struct.unpack(data_types[gdal.GetDataTypeName(band.DataType)]*xSize*ySize,rasterString)  
-                setattr(tileModel, 'band%d' % i, models.ImageTileRaster(raster = rasterString).save())
+                setattr(tileModel, 'band%i' % i, models.ImageTileRaster(raster = rasterString).save())
                 tileModel.xSize = xSize
                 tileModel.ySize = ySize
 
@@ -191,7 +196,45 @@ def importImage():
 
         ds = None
 
-importImage()
+log_file = open('log.txt', 'w')
+
+
+path = os.path.abspath('/home/rd320/Landsat8')
+des_path = os.path.abspath('/home/rd320/Landsat8-imported')
+files  = os.listdir(path)
+
+for _file in files:
+    filename = os.path.splitext(_file)[0]
+    filename = os.path.splitext(filename)[0]
+
+    try:
+        print 'Extract image %s' % os.path.join(path, _file)
+        archive = tarfile.open(os.path.join(path, _file))
+        archive.extractall(os.path.join(path, filename))
+
+        importImage(filename, os.path.join(path, filename))
+
+        print 'Remove extracted images'
+        for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(os.path.join(path, filename))
+
+        os.rename(os.path.join(path, _file), os.path.join(des_path, _file))
+    except Exception, e:
+        log_file.write('%s %s\n' % (_file, e))
+        print '%s %s' % (_file, e)
+        pass
+
+log_file.close()
+
+
+
+
+
+#importImage()
 
 # def main(argv):
 #     inputfile = ''

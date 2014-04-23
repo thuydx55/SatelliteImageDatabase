@@ -2,7 +2,7 @@ from mongoengine import *
 from datetime import datetime
 
 class Image(Document):
-	name = StringField(max_length=255)
+	name = StringField(max_length=255, unique=True)
 	date = DateTimeField()
 	# bands = ListField(ReferenceField(ImageBand))
 

@@ -100,7 +100,7 @@ def downloadImage(request, result_id, band):
 
 		gtiff = gdal.GetDriverByName('GTiff')
 
-		output_dataset = gtiff.Create(newfile.name, finalXSize, finalYSize, 1, GDT_UInt16)
+		output_dataset = gtiff.Create(str(newfile.name), finalXSize, finalYSize, 1, GDT_UInt16)
 
 		for y in range(0, yBlock):
 			for x in range(0, xBlock):
@@ -133,7 +133,7 @@ def downloadImage(request, result_id, band):
 
         output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
 
-        ds = gdal.Open(newfile.name, gdal.GA_Update)
+        ds = gdal.Open(str(newfile.name), gdal.GA_Update)
         ds.SetGeoTransform(output_geo_transform)
         ds.SetProjection(src_srs.ExportToWkt())
 
