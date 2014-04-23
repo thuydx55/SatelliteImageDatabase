@@ -170,7 +170,7 @@ def downloadImage(request, result_id, band):
         clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
         
         finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
-        gdalnumeric.SaveArray(clip, finalFile.name , format="GTiff")
+        gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
         
         ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
         ds.SetGeoTransform(output_geo_transform)
