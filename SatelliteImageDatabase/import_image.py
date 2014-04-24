@@ -176,60 +176,60 @@ def importImage(filename, file_path):
 
         ds = None
 
-log_file = open('log.txt', 'w')
+# log_file = open('log.txt', 'w')
 
 
-path = os.path.abspath('/home/rd320/Landsat8')
-des_path = os.path.abspath('/home/rd320/Landsat8-imported')
-files  = os.listdir(path)
-
-for _file in files:
-    filename = os.path.splitext(_file)[0]
-    filename = os.path.splitext(filename)[0]
-
-    try:
-        print 'Extract image %s' % os.path.join(path, _file)
-        archive = tarfile.open(os.path.join(path, _file))
-        archive.extractall(os.path.join(path, filename))
-
-        importImage(filename, os.path.join(path, filename))
-
-        print 'Remove extracted images'
-        for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
-            for name in files:
-                os.remove(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(os.path.join(path, filename))
-
-        os.rename(os.path.join(path, _file), os.path.join(des_path, _file))
-    except Exception, e:
-        log_file.write('%s %s\n' % (_file, e))
-        print '%s %s' % (_file, e)
-        pass
-
-log_file.close()
-
-# path = os.path.abspath('D:\_Dev\Images')
+# path = os.path.abspath('/home/rd320/Landsat8')
+# des_path = os.path.abspath('/home/rd320/Landsat8-imported')
 # files  = os.listdir(path)
-# _file = files[0]
 
-# filename = os.path.splitext(_file)[0]
-# filename = os.path.splitext(filename)[0]
+# for _file in files:
+#     filename = os.path.splitext(_file)[0]
+#     filename = os.path.splitext(filename)[0]
 
-# print 'Extract image %s' % os.path.join(path, _file)
-# archive = tarfile.open(os.path.join(path, _file))
-# archive.extractall(os.path.join(path, filename))
+#     try:
+#         print 'Extract image %s' % os.path.join(path, _file)
+#         archive = tarfile.open(os.path.join(path, _file))
+#         archive.extractall(os.path.join(path, filename))
 
-# importImage(filename, os.path.join(path, filename))
+#         importImage(filename, os.path.join(path, filename))
 
-# print 'Remove extracted images'
-# for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
-#     for name in files:
-#         os.remove(os.path.join(root, name))
-#     for name in dirs:
-#         os.rmdir(os.path.join(root, name))
-# os.rmdir(os.path.join(path, filename))
+#         print 'Remove extracted images'
+#         for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
+#             for name in files:
+#                 os.remove(os.path.join(root, name))
+#             for name in dirs:
+#                 os.rmdir(os.path.join(root, name))
+#         os.rmdir(os.path.join(path, filename))
+
+#         os.rename(os.path.join(path, _file), os.path.join(des_path, _file))
+#     except Exception, e:
+#         log_file.write('%s %s\n' % (_file, e))
+#         print '%s %s' % (_file, e)
+#         pass
+# 
+# log_file.close()
+
+path = os.path.abspath('/Volumes/Source/Images')
+files  = os.listdir(path)
+_file = files[0]
+
+filename = os.path.splitext(_file)[0]
+filename = os.path.splitext(filename)[0]
+
+print 'Extract image %s' % os.path.join(path, _file)
+archive = tarfile.open(os.path.join(path, _file))
+archive.extractall(os.path.join(path, filename))
+
+importImage(filename, os.path.join(path, filename))
+
+print 'Remove extracted images'
+for root, dirs, files in os.walk(os.path.join(path, filename), topdown=False):
+    for name in files:
+        os.remove(os.path.join(root, name))
+    for name in dirs:
+        os.rmdir(os.path.join(root, name))
+os.rmdir(os.path.join(path, filename))
 
 
 

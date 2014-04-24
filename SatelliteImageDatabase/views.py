@@ -160,14 +160,15 @@ def downloadImage(request, result_id, band):
         pxWidth = int(LRx - ULx)
         pxHeight = int(LRy - ULy)
 
-        rasterPoly = Image.new("L", (pxWidth, pxHeight), 1)
+        rasterPoly = Image.new("L", (finalXSize, finalYSize), 1)
         rasterize = ImageDraw.Draw(rasterPoly)
         rasterize.polygon(pixels, 0)
 
-        mask = imageToArray(rasterPoly)
+        mask = imageToArray(rasterPoly)[ULy:LRy, ULx:LRx]
 
 		# Clip the image using the mask
         clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
+        # clip = clip[ULy:LRy, ULx:LRx]
         
         finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
         gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
@@ -237,3 +238,4 @@ def imageToArray(i):
     a=gdalnumeric.fromstring(i.tostring(),'b')
     a.shape=i.im.size[1], i.im.size[0]
     return a
+
