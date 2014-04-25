@@ -97,14 +97,6 @@ def importImage(filename, file_path):
 
             ext=GetExtent(gt,cols,rows)
 
-            # src_srs=osr.SpatialReference()
-            # src_srs.ImportFromWkt(ds.GetProjection())
-            # tgt_srs=osr.SpatialReference()
-            # tgt_srs.ImportFromEPSG(4326)
-            # tgt_srs = src_srs.CloneGeogCS()
-
-            # geo_ext=ReprojectCoords(ext,src_srs,tgt_srs)
-
             pointTL, pointBL, pointBR, pointTR = ext
 
             blockCols = int(cols / block_size) + 1
@@ -116,13 +108,7 @@ def importImage(filename, file_path):
             for y in range(0, blockRows):
                 blockMatrix.append([])
                 for x in range(0, blockCols):
-                    blockMatrix[y].append(models.ImageTile(indexTileX = x, indexTileY = y, image = img
-                        # ,polygonBorder=[[pointMatrix[y][x],
-                        #                          pointMatrix[y+1][x], 
-                        #                          pointMatrix[y+1][x+1],
-                        #                          pointMatrix[y][x+1],
-                        #                          pointMatrix[y][x]]]
-                                                 ).save())
+                    blockMatrix[y].append(models.ImageTile(indexTileX = x, indexTileY = y, image = img).save())
 
         src_srs=osr.SpatialReference()
         src_srs.ImportFromWkt(ds.GetProjection())

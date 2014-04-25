@@ -19,10 +19,6 @@ def index(request):
         try:
             startDate = datetime.datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
             endDate = datetime.datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
-            # ULPoint = map(float, request.POST['ul'].split(','))
-            # URPoint = map(float, request.POST['ur'].split(','))
-            # LLPoint = map(float, request.POST['ll'].split(','))
-            # LRPoint = map(float, request.POST['lr'].split(','))
             inputPolygon = eval(request.POST['polygon'])
             bands = map(int, request.POST['bands'].split(','))
         except Exception, e:
@@ -42,34 +38,16 @@ def index(request):
 
 def queryImages(images, bands, inputPolygon):
 
-    ULx = LRx = inputPolygon[0][0]
-    ULy = LRy = inputPolygon[0][1]
-
-    for x, y in inputPolygon:
-        if x > LRx:
-            LRx = x
-        if x < ULx:
-            ULx = x
-        if y > ULy:
-            ULy = y
-        if y < LRy:
-            LRy = y
-    query_polygon = [[ULx, ULy], [ULx, LRy], [LRx, LRy], [LRx, ULy], [ULx, ULy]]
-
-    print query_polygon
-
     if inputPolygon[0] != inputPolygon[len(inputPolygon)-1]:
         inputPolygon.append(inputPolygon[0])
 
     images_dict = []
 
     for imageQuery in images:
-        intersectTiles = models.ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[query_polygon]).order_by('+indexTileX', '+indexTileY')
+        intersectTiles = models.ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[inputPolygon]).order_by('+indexTileX', '+indexTileY')
 
         if intersectTiles.count() == 0:
             continue
-
-
 
         qr = models.QueryResult(tileMatrix = intersectTiles,
                                  imageName = imageQuery.name,
@@ -90,117 +68,161 @@ def downloadImage(request, result_id, band):
         if resultImg == None:
             raise Http404 
 
+        blockSize = 512
+        if band == 8:
+            blockSize = 1024 
+
         tiles = list(resultImg.tileMatrix)
 
         newfile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
 
-        firstTile, lastTile = tiles[0], tiles[len(tiles)-1]
+        # firstTile, lastTile = tiles[0], tiles[len(tiles)-1]
 
-        xBlock = lastTile.indexTileX - firstTile.indexTileX + 1
-        yBlock = lastTile.indexTileY - firstTile.indexTileY + 1
+        # xBlock = lastTile.indexTileX - firstTile.indexTileX + 1
+        # yBlock = lastTile.indexTileY - firstTile.indexTileY + 1
 
-        finalXSize = firstTile.getXSize(band) * (xBlock-1) + lastTile.getXSize(band)
-        finalYSize = firstTile.getYSize(band) * (yBlock-1) + lastTile.getYSize(band)
+        # finalXSize = firstTile.getXSize(band) * (xBlock-1) + lastTile.getXSize(band)
+        # finalYSize = firstTile.getYSize(band) * (yBlock-1) + lastTile.getYSize(band)
 
-        gtiff = gdal.GetDriverByName('GTiff')
+        # gtiff = gdal.GetDriverByName('GTiff')
 
-        output_dataset = gtiff.Create(str(newfile.name), finalXSize, finalYSize, 1, GDT_UInt16)
+        # output_dataset = gtiff.Create(str(newfile.name), finalXSize, finalYSize, 1, GDT_UInt16)
 
         # Write Raster to file
         diffX = tiles[0].indexTileX
         diffY = tiles[0].indexTileY
 
-        for y in range(0, yBlock):
-            for x in range(0, xBlock):
-                currentTile = tiles[x*yBlock+y]
-                while not (len(tiles) > 0 and currentTile.indexTileX-diffX == x and currentTile.indexTileY-diffY == y):
-                    tiles.remove(currentTile)
-                    currentTile = tiles[x*yBlock+y]
+        maxTileIndexX = minTileIndexX = tiles[0].indexTileX
+        maxTileIndexY = minTileIndexY = tiles[0].indexTileY
 
-                output_dataset.GetRasterBand(1).WriteRaster( 
-                    x*firstTile.getXSize(band), 
-                    y*firstTile.getYSize(band), 
-                    currentTile.getXSize(band), 
-                    currentTile.getYSize(band), 
-                    getattr(currentTile, 'band%s' % band).raster)
+        botTile = rightTile = None
+
+        for tile in tiles:
+            if tile.indexTileX > maxTileIndexX:
+                maxTileIndexX = tile.indexTileX
+                rightTile = tile
+
+            if tile.indexTileX < minTileIndexX:
+                minTileIndexX = tile.indexTileX
+
+            if tile.indexTileY > maxTileIndexY:
+                maxTileIndexY = tile.indexTileY
+                botTile = tile
+
+            if tile.indexTileY < minTileIndexY:
+                minTileIndexY = tile.indexTileY
+
+        print '%i %i %i %i' % (maxTileIndexX, minTileIndexX, maxTileIndexY, minTileIndexY)
+
+
+        preClipSizeX = (maxTileIndexX - minTileIndexX)*blockSize + rightTile.getXSize(band)
+        preClipSizeY = (maxTileIndexY - minTileIndexY)*blockSize + botTile.getYSize(band)
+
+        gtiff = gdal.GetDriverByName('GTiff')
+        output_dataset = gtiff.Create(str(newfile.name), preClipSizeX, preClipSizeY, 1, GDT_UInt16)
+
+        print '%i %i' % (preClipSizeX, preClipSizeY)
+
+        for tile in tiles:
+            output_dataset.GetRasterBand(1).WriteRaster(
+                (tile.indexTileX - minTileIndexX)*blockSize,
+                (tile.indexTileY - minTileIndexY)*blockSize,
+                tile.getXSize(band),
+                tile.getYSize(band),
+                getattr(tile, 'band%s' % band).raster)
+
+
+        # for y in range(0, yBlock):
+        #     for x in range(0, xBlock):
+        #         currentTile = tiles[x*yBlock+y]
+        #         while not (len(tiles) > 0 and currentTile.indexTileX-diffX == x and currentTile.indexTileY-diffY == y):
+        #             tiles.remove(currentTile)
+        #             currentTile = tiles[x*yBlock+y]
+
+        #         output_dataset.GetRasterBand(1).WriteRaster( 
+        #             x*firstTile.getXSize(band), 
+        #             y*firstTile.getYSize(band), 
+        #             currentTile.getXSize(band), 
+        #             currentTile.getYSize(band), 
+        #             getattr(currentTile, 'band%s' % band).raster)
         
-        outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
-                            tiles[yBlock-1].polygonBorder['coordinates'][0][1],
-                            tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
-                            tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
+        # outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
+        #                     tiles[yBlock-1].polygonBorder['coordinates'][0][1],
+        #                     tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
+        #                     tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
 
-        src_srs=osr.SpatialReference()
-        src_srs.ImportFromWkt(tiles[0].image.wkt)
-        tgt_srs=osr.SpatialReference()
-        tgt_srs.ImportFromEPSG(4326)
-        tgt_srs = src_srs.CloneGeogCS()
+        # src_srs=osr.SpatialReference()
+        # src_srs.ImportFromWkt(tiles[0].image.wkt)
+        # tgt_srs=osr.SpatialReference()
+        # tgt_srs.ImportFromEPSG(4326)
+        # tgt_srs = src_srs.CloneGeogCS()
 
-        ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
+        # ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
 
-        xPix = (round(ext[2][0])-round(ext[0][0]))/finalXSize
-        yPix = (round(ext[2][1])-round(ext[0][1]))/finalYSize
+        # xPix = (round(ext[2][0])-round(ext[0][0]))/finalXSize
+        # yPix = (round(ext[2][1])-round(ext[0][1]))/finalYSize
 
-        origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
+        # origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
 
-        output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
+        # output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
 
-        # Clip Image
-        pixels = []
-        inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
-        for p in inputPolygonReprojected:
-            pixels.append(world2Pixel(output_geo_transform, p[0], p[1]))
+        # # Clip Image
+        # pixels = []
+        # inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
+        # for p in inputPolygonReprojected:
+        #     pixels.append(world2Pixel(output_geo_transform, p[0], p[1]))
 
-        pixels = intersectPolygonToBorder(pixels, finalXSize, finalYSize)
+        # pixels = intersectPolygonToBorder(pixels, finalXSize, finalYSize)
 
-          # Get the Upper-Left and Lower-Right point of minimum rectagle that contains input polygon
-        ULx = LRx = inputPolygonReprojected[0][0]
-        ULy = LRy = inputPolygonReprojected[0][1]
+        #   # Get the Upper-Left and Lower-Right point of minimum rectagle that contains input polygon
+        # ULx = LRx = inputPolygonReprojected[0][0]
+        # ULy = LRy = inputPolygonReprojected[0][1]
 
-        for x, y in inputPolygonReprojected:
-            if x > LRx:
-                LRx = x
-            if x < ULx:
-                ULx = x
-            if y > ULy:
-                ULy = y
-            if y < LRy:
-                LRy = y
+        # for x, y in inputPolygonReprojected:
+        #     if x > LRx:
+        #         LRx = x
+        #     if x < ULx:
+        #         ULx = x
+        #     if y > ULy:
+        #         ULy = y
+        #     if y < LRy:
+        #         LRy = y
 
-        ULx, ULy = world2Pixel(output_geo_transform, ULx, ULy)
-        LRx, LRy = world2Pixel(output_geo_transform, LRx, LRy)
+        # ULx, ULy = world2Pixel(output_geo_transform, ULx, ULy)
+        # LRx, LRy = world2Pixel(output_geo_transform, LRx, LRy)
 
-        ULx = 0 if ULx < 0 else ULx
-        LRx = 0 if LRx < 0 else LRx
-        ULy = 0 if ULy < 0 else ULy
-        LRy = 0 if LRy < 0 else LRy
+        # ULx = 0 if ULx < 0 else ULx
+        # LRx = 0 if LRx < 0 else LRx
+        # ULy = 0 if ULy < 0 else ULy
+        # LRy = 0 if LRy < 0 else LRy
 
-        # clipped the output dataset by minimum rect
-        clip = output_dataset.GetRasterBand(1).ReadAsArray(0, 0, finalXSize, finalYSize)[ULy:LRy, ULx:LRx]
+        # # clipped the output dataset by minimum rect
+        # clip = output_dataset.GetRasterBand(1).ReadAsArray(0, 0, finalXSize, finalYSize)[ULy:LRy, ULx:LRx]
 
-        rasterPoly = Image.new("L", (finalXSize, finalYSize), 1)
-        rasterize = ImageDraw.Draw(rasterPoly)
-        rasterize.polygon(pixels, 0)
+        # rasterPoly = Image.new("L", (finalXSize, finalYSize), 1)
+        # rasterize = ImageDraw.Draw(rasterPoly)
+        # rasterize.polygon(pixels, 0)
 
-        # create mask to clip image by polygon
-        mask = imageToArray(rasterPoly)[ULy:LRy, ULx:LRx]
+        # # create mask to clip image by polygon
+        # mask = imageToArray(rasterPoly)[ULy:LRy, ULx:LRx]
 
-        # Clip the image using the mask
-        clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
-        # clip = clip[ULy:LRy, ULx:LRx]
+        # # Clip the image using the mask
+        # clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
+        # # clip = clip[ULy:LRy, ULx:LRx]
         
-        finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
-        gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
+        # finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
+        # gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
         
-        ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
-        ds.SetGeoTransform(output_geo_transform)
-        ds.SetProjection(src_srs.ExportToWkt())
+        # ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
+        # ds.SetGeoTransform(output_geo_transform)
+        # ds.SetProjection(src_srs.ExportToWkt())
 
      
          # Return HttpResponse Image
-        wrapper = FileWrapper(finalFile)
-        content_type = mimetypes.guess_type(finalFile.name)[0]
+        wrapper = FileWrapper(newfile)
+        content_type = mimetypes.guess_type(newfile.name)[0]
         response = StreamingHttpResponse(wrapper, content_type='content_type')
-        response['Content-Disposition'] = "attachment; filename=%s" % finalFile.name
+        response['Content-Disposition'] = "attachment; filename=%s" % newfile.name
 
         return response
 
