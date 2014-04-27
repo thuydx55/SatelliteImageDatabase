@@ -8,10 +8,6 @@ import struct
 gdal.UseExceptions()
 mongoengine.connect("SatelliteImageDatabase", host='localhost', port=27017)
 
-#models.ImageTile.drop_collection()
-#models.ImageTileRaster.drop_collection()
-#models.Image.drop_collection()
-
 def GetExtent(gt,cols,rows):
     ''' Return list of corner coordinates from a geotransform
 
@@ -133,23 +129,23 @@ def importImage(filename, file_path):
                 tileModel.ySize = ySize
 
                 TL = transform.TransformPoint(
-                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+0.5)*gt[2],
-                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+0.5)*gt[5])
+                        gt[0] + (x*block_size+0.5)*gt[1] + (y*block_size+0.5)*gt[2],
+                        gt[3] + (x*block_size+0.5)*gt[4] + (y*block_size+0.5)*gt[5])
                 TL = [TL[0], TL[1]]
 
                 BL = transform.TransformPoint(
-                        gt[0] + (x*block_size-0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
-                        gt[3] + (x*block_size-0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
+                        gt[0] + (x*block_size+0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
+                        gt[3] + (x*block_size+0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
                 BL = [BL[0], BL[1]]
 
                 BR = transform.TransformPoint(
-                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
-                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
+                        gt[0] + (x*block_size+xSize+0.5)*gt[1] + (y*block_size+ySize+0.5)*gt[2],
+                        gt[3] + (x*block_size+xSize+0.5)*gt[4] + (y*block_size+ySize+0.5)*gt[5])
                 BR = [BR[0], BR[1]]
 
                 TR = transform.TransformPoint(
-                        gt[0] + (x*block_size+xSize-1+0.5)*gt[1] + (y*block_size+0.5)*gt[2],
-                        gt[3] + (x*block_size+xSize-1+0.5)*gt[4] + (y*block_size+0.5)*gt[5])
+                        gt[0] + (x*block_size+xSize+0.5)*gt[1] + (y*block_size+0.5)*gt[2],
+                        gt[3] + (x*block_size+xSize+0.5)*gt[4] + (y*block_size+0.5)*gt[5])
                 TR = [TR[0], TR[1]]
 
                 tileModel.polygonBorder = [[TL, BL, BR, TR, TL]]
@@ -161,6 +157,10 @@ def importImage(filename, file_path):
                 rasterTile = None
 
         ds = None
+
+models.ImageTile.drop_collection()
+models.ImageTileRaster.drop_collection()
+models.Image.drop_collection()
 
 # log_file = open('log.txt', 'w')
 
@@ -196,7 +196,9 @@ def importImage(filename, file_path):
 # 
 # log_file.close()
 
-path = os.path.abspath('/Volumes/Source/Images')
+# path = os.path.abspath('/Volumes/Source/Images')
+path = os.path.abspath('D:\_Dev\Images')
+
 files  = os.listdir(path)
 _file = files[0]
 
