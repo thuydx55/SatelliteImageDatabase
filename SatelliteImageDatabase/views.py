@@ -9,6 +9,7 @@ from osgeo import gdal, gdalnumeric, ogr, osr
 from PIL import Image, ImageDraw
 from osgeo.gdalconst import *  
 import models
+from mongoengine import Q
 
 gdal.UseExceptions()
 
@@ -21,7 +22,7 @@ def index(request):
         try:
             startDate = datetime.datetime.strptime(request.POST['start_date'], "%Y-%m-%d")
             endDate = datetime.datetime.strptime(request.POST['end_date'], "%Y-%m-%d")
-            inputPolygon = eval(request.POST['polygon'])
+            inputPolygons = eval(request.POST['polygons'])
             bands = map(int, request.POST['bands'].split(','))
         except Exception, e:
             response_dict.update({'error': str(e)})
@@ -30,7 +31,7 @@ def index(request):
         imagesQuerySet = models.Image.objects.filter(date__gt=startDate, date__lt=endDate)
 
         
-        images_dict = queryImages(imagesQuerySet, bands, inputPolygon)
+        images_dict = queryImages(imagesQuerySet, bands, inputPolygons)
         response_dict.update({'images':images_dict})
 
         # response_dict.update({'tile_count': len(allTiles)})
@@ -38,22 +39,27 @@ def index(request):
 
     raise Http404
 
-def queryImages(images, bands, inputPolygon):
+def queryImages(images, bands, inputPolygons):
 
-    if inputPolygon[0] != inputPolygon[len(inputPolygon)-1]:
-        inputPolygon.append(inputPolygon[0])
+    for p in inputPolygons:
+        if p[0] != p[len(p)-1]:
+            p.append(p[0])
 
     images_dict = []
 
     for imageQuery in images:
-        intersectTiles = models.ImageTile.objects.filter(image=imageQuery, polygonBorder__geo_intersects=[inputPolygon])
+        args = Q()
+        for p in inputPolygons:
+            args = args | Q(polygonBorder__geo_intersects=[p])
+
+        intersectTiles = models.ImageTile.objects.filter(args, image=imageQuery)
 
         if intersectTiles.count() == 0:
             continue
 
         qr = models.QueryResult(tileMatrix = intersectTiles,
                                  imageName = imageQuery.name,
-                                 inputPolygon=[inputPolygon]).save()
+                                 inputPolygons=[[p] for p in inputPolygons]).save()
 
         for i in bands:
             query_dict = {}
@@ -79,142 +85,74 @@ def downloadImage(request, result_id, band):
         tgt_srs = src_srs.CloneGeogCS()
 
         preClipDS, preClipSize, preClipGeoTransform = GetPreClipImage(tiles, band, resultImg.imageName, src_srs, tgt_srs)
-        print preClipGeoTransform
+        # print preClipGeoTransform
 
-        pixels = []
-        inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
-        for p in inputPolygonReprojected:
-            pixels.append(world2Pixel(preClipGeoTransform, p[0], p[1]))
-
-        pixels = intersectPolygonToBorder(pixels, preClipSize[0], preClipSize[1])
-
-        ULx = LRx = inputPolygonReprojected[0][0]
-        ULy = LRy = inputPolygonReprojected[0][1]
-
-        for x, y in inputPolygonReprojected:
-            if x > LRx:
-                LRx = x
-            if x < ULx:
-                ULx = x
-            if y > ULy:
-                ULy = y
-            if y < LRy:
-                LRy = y
-
-        ULx, ULy = world2Pixel(preClipGeoTransform, ULx, ULy)
-        LRx, LRy = world2Pixel(preClipGeoTransform, LRx, LRy)
-
-        ULx = 0 if ULx < 0 else ULx
-        LRx = 0 if LRx < 0 else LRx
-        ULy = 0 if ULy < 0 else ULy
-        LRy = 0 if LRy < 0 else LRy
-
-        # clipped the output dataset by minimum rect
-        clip = preClipDS.GetRasterBand(1).ReadAsArray(0, 0, preClipSize[0], preClipSize[1])[ULy:LRy, ULx:LRx]
-
+        # Raster of input polygons
         rasterPoly = Image.new("L", (preClipSize[0], preClipSize[1]), 1)
         rasterize = ImageDraw.Draw(rasterPoly)
-        rasterize.polygon(pixels, 0)
+
+        inputPolygons = resultImg.inputPolygons
+
+        mostULx = mostLRx = mostULy = mostLRy = None
+
+        for polygon in inputPolygons:
+            pixels = []
+            inputPolygonReprojected = ReprojectCoords(polygon['coordinates'][0], tgt_srs, src_srs)
+            for p in inputPolygonReprojected:
+                pixels.append(world2Pixel(preClipGeoTransform, p[0], p[1]))
+
+            pixels = intersectPolygonToBorder(pixels, preClipSize[0], preClipSize[1])
+
+            if mostULx == None or   \
+                mostLRx == None or  \
+                mostULy == None or  \
+                mostLRy == None:
+                
+                mostULx = mostLRx = inputPolygonReprojected[0][0]
+                mostULy = mostLRy = inputPolygonReprojected[0][1]
+
+            for x, y in inputPolygonReprojected:
+                if x > mostLRx:
+                    mostLRx = x
+                if x < mostULx:
+                    mostULx = x
+                if y > mostULy:
+                    mostULy = y
+                if y < mostLRy:
+                    mostLRy = y
+
+            mostULx, mostULy = world2Pixel(preClipGeoTransform, mostULx, mostULy)
+            mostLRx, mostLRy = world2Pixel(preClipGeoTransform, mostLRx, mostLRy)
+
+            mostULx = 0 if mostULx < 0 else mostULx
+            mostLRx = 0 if mostLRx < 0 else mostLRx
+            mostULy = 0 if mostULy < 0 else mostULy
+            mostLRy = 0 if mostLRy < 0 else mostLRy
+
+            rasterize.polygon(pixels, 0)
+
+        # clipped the output dataset by minimum rect
+        clip = preClipDS.GetRasterBand(1).ReadAsArray(0, 0, preClipSize[0], preClipSize[1])[mostULy:mostLRy, mostULx:mostLRx]
 
         # create mask to clip image by polygon
-        mask = imageToArray(rasterPoly)[ULy:LRy, ULx:LRx]
+        mask = imageToArray(rasterPoly)[mostULy:mostLRy, mostULx:mostLRx]
 
         # Clip the image using the mask
         clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
 
         finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
         gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
+
+        clippedGeoTransform = [preClipGeoTransform[0] + mostULx*preClipGeoTransform[1],
+                                preClipGeoTransform[1],
+                                preClipGeoTransform[2],
+                                preClipGeoTransform[3] + mostULy*preClipGeoTransform[5],
+                                preClipGeoTransform[4],
+                                preClipGeoTransform[5]]
         
         ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
-        ds.SetGeoTransform(preClipGeoTransform)
+        ds.SetGeoTransform(clippedGeoTransform)
         ds.SetProjection(src_srs.ExportToWkt())
-
-
-        # for y in range(0, yBlock):
-        #     for x in range(0, xBlock):
-        #         currentTile = tiles[x*yBlock+y]
-        #         while not (len(tiles) > 0 and currentTile.indexTileX-diffX == x and currentTile.indexTileY-diffY == y):
-        #             tiles.remove(currentTile)
-        #             currentTile = tiles[x*yBlock+y]
-
-        #         output_dataset.GetRasterBand(1).WriteRaster( 
-        #             x*firstTile.getXSize(band), 
-        #             y*firstTile.getYSize(band), 
-        #             currentTile.getXSize(band), 
-        #             currentTile.getYSize(band), 
-        #             getattr(currentTile, 'band%s' % band).raster)
-        
-        # outputImageBorder = [tiles[0].polygonBorder['coordinates'][0][0], 
-        #                     tiles[yBlock-1].polygonBorder['coordinates'][0][1],
-        #                     tiles[(xBlock-1)*yBlock+yBlock-1].polygonBorder['coordinates'][0][2],
-        #                     tiles[(xBlock-1)*yBlock].polygonBorder['coordinates'][0][3]]
-
-        # src_srs=osr.SpatialReference()
-        # src_srs.ImportFromWkt(tiles[0].image.wkt)
-        # tgt_srs=osr.SpatialReference()
-        # tgt_srs.ImportFromEPSG(4326)
-        # tgt_srs = src_srs.CloneGeogCS()
-
-        # ext=ReprojectCoords(outputImageBorder, tgt_srs, src_srs)
-
-        # xPix = (round(ext[2][0])-round(ext[0][0]))/finalXSize
-        # yPix = (round(ext[2][1])-round(ext[0][1]))/finalYSize
-
-        # origin_point = [round(ext[0][0])+xPix/2, round(ext[0][1])- yPix/2]
-
-        # output_geo_transform = [origin_point[0], xPix, 0, origin_point[1], 0, yPix]
-
-        # # Clip Image0
-        # pixels = []
-        # inputPolygonReprojected = ReprojectCoords(resultImg.inputPolygon['coordinates'][0], tgt_srs, src_srs)
-        # for p in inputPolygonReprojected:
-        #     pixels.append(world2Pixel(output_geo_transform, p[0], p[1]))
-
-        # pixels = intersectPolygonToBorder(pixels, finalXSize, finalYSize)
-
-        #   # Get the Upper-Left and Lower-Right point of minimum rectagle that contains input polygon
-        # ULx = LRx = inputPolygonReprojected[0][0]
-        # ULy = LRy = inputPolygonReprojected[0][1]
-
-        # for x, y in inputPolygonReprojected:
-        #     if x > LRx:
-        #         LRx = x
-        #     if x < ULx:
-        #         ULx = x
-        #     if y > ULy:
-        #         ULy = y
-        #     if y < LRy:
-        #         LRy = y
-
-        # ULx, ULy = world2Pixel(output_geo_transform, ULx, ULy)
-        # LRx, LRy = world2Pixel(output_geo_transform, LRx, LRy)
-
-        # ULx = 0 if ULx < 0 else ULx
-        # LRx = 0 if LRx < 0 else LRx
-        # ULy = 0 if ULy < 0 else ULy
-        # LRy = 0 if LRy < 0 else LRy
-
-        # # clipped the output dataset by minimum rect
-        # clip = output_dataset.GetRasterBand(1).ReadAsArray(0, 0, finalXSize, finalYSize)[ULy:LRy, ULx:LRx]
-
-        # rasterPoly = Image.new("L", (finalXSize, finalYSize), 1)
-        # rasterize = ImageDraw.Draw(rasterPoly)
-        # rasterize.polygon(pixels, 0)
-
-        # # create mask to clip image by polygon
-        # mask = imageToArray(rasterPoly)[ULy:LRy, ULx:LRx]
-
-        # # Clip the image using the mask
-        # clip = gdalnumeric.choose(mask, (clip, 0)).astype(gdalnumeric.uint16)
-        # # clip = clip[ULy:LRy, ULx:LRx]
-        
-        # finalFile = NamedTemporaryFile(suffix='.tif', prefix=resultImg.imageName+'-'+str(band))
-        # gdalnumeric.SaveArray(clip, str(finalFile.name) , format="GTiff")
-        
-        # ds = gdal.Open(str(finalFile.name), gdal.GA_Update)
-        # ds.SetGeoTransform(output_geo_transform)
-        # ds.SetProjection(src_srs.ExportToWkt())
-
      
          # Return HttpResponse Image
         wrapper = FileWrapper(finalFile)
