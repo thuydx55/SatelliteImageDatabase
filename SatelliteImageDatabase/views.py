@@ -102,27 +102,29 @@ def downloadImage(request, result_id, band):
                 pixels.append(world2Pixel(preClipGeoTransform, p[0], p[1]))
 
             pixels = intersectPolygonToBorder(pixels, preClipSize[0], preClipSize[1])
+            
+            print pixels
 
             if mostULx == None or   \
                 mostLRx == None or  \
                 mostULy == None or  \
                 mostLRy == None:
                 
-                mostULx = mostLRx = inputPolygonReprojected[0][0]
-                mostULy = mostLRy = inputPolygonReprojected[0][1]
+                mostULx = mostLRx = pixels[0][0]
+                mostULy = mostLRy = pixels[0][1]
 
-            for x, y in inputPolygonReprojected:
+            for x, y in pixels:
                 if x > mostLRx:
                     mostLRx = x
                 if x < mostULx:
                     mostULx = x
-                if y > mostULy:
+                if y < mostULy:
                     mostULy = y
-                if y < mostLRy:
+                if y > mostLRy:
                     mostLRy = y
 
-            mostULx, mostULy = world2Pixel(preClipGeoTransform, mostULx, mostULy)
-            mostLRx, mostLRy = world2Pixel(preClipGeoTransform, mostLRx, mostLRy)
+            # mostULx, mostULy = world2Pixel(preClipGeoTransform, mostULx, mostULy)
+            # mostLRx, mostLRy = world2Pixel(preClipGeoTransform, mostLRx, mostLRy)
 
             mostULx = 0 if mostULx < 0 else mostULx
             mostLRx = 0 if mostLRx < 0 else mostLRx
@@ -130,6 +132,8 @@ def downloadImage(request, result_id, band):
             mostLRy = 0 if mostLRy < 0 else mostLRy
 
             rasterize.polygon(pixels, 0)
+
+        print '%i %i %i %i' % (mostULx, mostULy, mostLRx, mostLRy)
 
         # clipped the output dataset by minimum rect
         clip = preClipDS.GetRasterBand(1).ReadAsArray(0, 0, preClipSize[0], preClipSize[1])[mostULy:mostLRy, mostULx:mostLRx]

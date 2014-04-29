@@ -111,7 +111,7 @@ class ShapeDistrict(Document):
 
     shape = ListField(PolygonField())
 
- class ShapeCommune(Document):
+class ShapeCommune(Document):
     district = ReferenceField(ShapeProvince)
 
     typeVN = StringField()
