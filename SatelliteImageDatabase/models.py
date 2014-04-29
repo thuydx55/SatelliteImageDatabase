@@ -49,6 +49,13 @@ class ImageTile(Document):
 			return self.ySize*2
 		return self.ySize
 
+	def countBand(self):
+		count = 0
+		for i in range(1, 12):
+			if getattr(self, 'band%i' % i) is not None:
+				count = count + 1
+		return count
+
 	meta = {
 		'indexes': [
 			[('indexTileX', 1), ('indexTileY', 1)]
