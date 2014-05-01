@@ -36,32 +36,32 @@ def index(request):
             p = models.ShapeProvince.objects.filter(id=request.POST['provinceid']).first()
             if p is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='Province not found')), content_type="application/json")
-            inputPolygons = p.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in p.shape]
         if 'districtid' in request.POST:
             d = models.ShapeDistrict.objects.filter(id=request.POST['districtid']).first()
             if d is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='District not found')), content_type="application/json")
-            inputPolygons = d.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in d.shape]
         if 'communeid' in request.POST:
             c = models.ShapeDistrict.objects.filter(id=request.POST['communeid']).first()
             if c is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='Commune not found')), content_type="application/json")
-            inputPolygons = c.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in c.shape]
         if 'province' in request.POST:
             p = models.ShapeProvince.objects.filter(nameEN=request.POST['province']).first()
             if p is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='Province not found')), content_type="application/json")
-            inputPolygons = p.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in p.shape]
         if 'district' in request.POST:
             d = models.ShapeDistrict.objects.filter(nameEN=request.POST['district']).first()
             if d is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='District not found')), content_type="application/json")
-            inputPolygons = d.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in d.shape]
         if 'commune' in request.POST:
             c = models.ShapeDistrict.objects.filter(nameEN=request.POST['commune']).first()
             if c is None:
                 return HttpResponse(json.dumps(dict(status='failed', error='Commune not found')), content_type="application/json")
-            inputPolygons = c.shape
+            inputPolygons = [polygon['coordinates'][0] for polygon in c.shape]
 
 
         images_dict = queryImages(imagesQuerySet, bands, inputPolygons)
