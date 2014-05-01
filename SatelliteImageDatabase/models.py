@@ -81,12 +81,18 @@ class ShapeCountry(Document):
 
     shape = ListField(PolygonField())
 
+    def __str__(self):
+        return self.name
+
 class ShapeRegion(Document):
     country = ReferenceField(ShapeCountry)
-    nameVN = StringField()
+    nameVN = StringField(unique=True)
     nameEN = StringField()
 
     shape = ListField(PolygonField())
+
+    def __str__(self):
+        return self.nameEN
 
 class ShapeProvince(Document):
     country = ReferenceField(ShapeCountry)
@@ -95,10 +101,13 @@ class ShapeProvince(Document):
     typeVN = StringField()
     typeEN = StringField()
 
-    nameVN = StringField()
+    nameVN = StringField(unique=True)
     nameEN = StringField()
 
     shape = ListField(PolygonField())
+
+    def __str__(self):
+        return self.nameEN
 
 class ShapeDistrict(Document):
     province = ReferenceField(ShapeProvince)
@@ -111,8 +120,11 @@ class ShapeDistrict(Document):
 
     shape = ListField(PolygonField())
 
+    def __str__(self):
+        return '%s - %s' % (self.nameEN, self.province.nameEN)
+
 class ShapeCommune(Document):
-    district = ReferenceField(ShapeProvince)
+    district = ReferenceField(ShapeDistrict)
 
     typeVN = StringField()
     typeEN = StringField()
@@ -121,4 +133,7 @@ class ShapeCommune(Document):
     nameEN = StringField()
 
     shape = ListField(PolygonField())
+
+    def __str__(self):
+        return '%s - %s' % (self.nameEN, self.district.nameEN)
 
