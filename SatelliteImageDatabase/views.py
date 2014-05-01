@@ -86,10 +86,10 @@ def queryImages(images, bands, inputPolygons):
                 mostLeft = pp[0]
             if mostRight < pp[0]:
                 mostRight = pp[0]
-            if mostTop < pp[0]:
-                mostTop = pp[0]
-            if mostBot > pp[0]:
-                mostBot = pp[0]
+            if mostTop < pp[1]:
+                mostTop = pp[1]
+            if mostBot > pp[1]:
+                mostBot = pp[1]
 
         queryPolygons.append([
             [mostLeft, mostTop],
