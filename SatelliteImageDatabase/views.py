@@ -74,18 +74,39 @@ def index(request):
 
 def queryImages(images, bands, inputPolygons):
 
+    queryPolygons = []
+
     for p in inputPolygons:
-        if p[0] != p[len(p)-1]:
-            p.append(p[0])
+        # if p[0] != p[len(p)-1]:
+        #     p.append(p[0])
+        mostLeft = mostRight = p[0][0]
+        mostTop = mostBot = p[0][1]
+        for pp in p:
+            if mostLeft > pp[0]:
+                mostLeft = pp[0]
+            if mostRight < pp[0]:
+                mostRight = pp[0]
+            if mostTop < pp[0]:
+                mostTop = pp[0]
+            if mostBot > pp[0]:
+                mostBot = pp[0]
+
+        queryPolygons.append([
+            [mostLeft, mostTop],
+            [mostLeft, mostBot], 
+            [mostRight, mostBot], 
+            [mostRight, mostTop], 
+            [mostLeft, mostTop]])
 
     images_dict = []
 
     for imageQuery in images:
         args = Q()
-        for p in inputPolygons:
+        for p in queryPolygons:
             args = args | Q(polygonBorder__geo_intersects=[p])
 
-        intersectTiles = models.ImageTile.objects.filter(args, image=imageQuery)
+        imageTileQS = models.ImageTile.objects.filter(image=imageQuery)
+        intersectTiles = imageTileQS.filter(args)
 
         if intersectTiles.count() == 0:
             continue
