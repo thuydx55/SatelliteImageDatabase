@@ -4,7 +4,7 @@ from django.core.servers.basehttp import FileWrapper
 from django.core.files.temp import NamedTemporaryFile
 
 import hashlib
-import shutil, os, datetime, json, mimetypes, settings, ast
+import shutil, os, datetime, json, mimetypes, settings, ast, time
 from osgeo import gdal, gdalnumeric, ogr, osr
 from PIL import Image, ImageDraw
 from osgeo.gdalconst import *  
@@ -99,27 +99,33 @@ def queryImages(images, bands, inputPolygons):
             [mostLeft, mostTop]])
 
     images_dict = []
+    args = Q()
+    for p in queryPolygons:
+        args = args | Q(polygonBorder__geo_intersects=[p])
+    queryResultPolygon = None
 
     for imageQuery in images:
-        args = Q()
-        for p in queryPolygons:
-            args = args | Q(polygonBorder__geo_intersects=[p])
-
+        startTime = time.time()
         imageTileQS = models.ImageTile.objects.filter(image=imageQuery)
         intersectTiles = imageTileQS.filter(args)
+        #print '\t%s' % (time.time()-startTime)
 
-        if intersectTiles.count() == 0:
+        if len(intersectTiles) == 0:
             continue
-
+        if queryResultPolygon is None:
+            queryResultPolygon = models.QueryResultPolygon(polygons = [[p] for p in inputPolygons]).save()
         qr = models.QueryResult(tileMatrix = intersectTiles,
                                  imageName = imageQuery.name,
-                                 inputPolygons=[[p] for p in inputPolygons]).save()
+                                 inputPolygons=queryResultPolygon).save()
+        print '\t\t%s' % (time.time()-startTime)
 
         for i in bands:
             query_dict = {}
             query_dict.update({'image_name': imageQuery.name})
             query_dict.update({'download_link': '/download/' + str(qr.id) + '/' + str(i)})
             images_dict.append(query_dict)
+
+        print time.time()-startTime
 
     return images_dict
 
@@ -145,7 +151,7 @@ def downloadImage(request, result_id, band):
         rasterPoly = Image.new("L", (preClipSize[0], preClipSize[1]), 1)
         rasterize = ImageDraw.Draw(rasterPoly)
 
-        inputPolygons = resultImg.inputPolygons
+        inputPolygons = resultImg.inputPolygons.polygons
 
         mostULx = mostLRx = mostULy = mostLRy = None
 

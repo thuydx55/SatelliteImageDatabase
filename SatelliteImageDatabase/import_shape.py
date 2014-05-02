@@ -14,6 +14,7 @@ def process_match(m):
     return unichr(int(m.group(1), 16)).encode('utf-8')
 
 path = os.path.abspath('C:\Users\Nick\Desktop\Vietnam Administration')
+path = os.path.abspath('/home/rd320/Desktop/Vietnam Administration')
 pattern = '<U\+(.{4})>'
 
 content = open(os.path.join(path, 'VNM_adm0.json')).read()

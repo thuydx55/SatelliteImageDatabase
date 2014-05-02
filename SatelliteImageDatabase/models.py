@@ -62,9 +62,12 @@ class ImageTile(Document):
         ]
     }
 
+class QueryResultPolygon(Document):
+    polygons = ListField(PolygonField())
+
 class QueryResult(Document):
     imageName = StringField(max_length=255)
-    inputPolygons = ListField(PolygonField())
+    inputPolygons = ReferenceField(QueryResultPolygon)
     tileMatrix = ListField(ReferenceField(ImageTile))
 
     created = DateTimeField(default=datetime.now)
