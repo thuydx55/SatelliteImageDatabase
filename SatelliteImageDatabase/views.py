@@ -162,6 +162,8 @@ def downloadImage(request, result_id, band):
                 pixels.append(world2Pixel(preClipGeoTransform, p[0], p[1]))
 
             pixels = intersectPolygonToBorder(pixels, preClipSize[0], preClipSize[1])
+            if pixels is None:
+                continue
             
             print pixels
 
@@ -351,14 +353,18 @@ def intersectPolygonToBorder(pixel_polygon, xSize, ySize):
     borderJson = { "type": "Polygon", "coordinates": [border] }
     borderGeo = ogr.CreateGeometryFromJson(str(borderJson))
 
-    intersectedGeo = polygonGeo.Intersection(borderGeo)
-    intersected = ast.literal_eval(intersectedGeo.ExportToJson())
+    try:
+        intersectedGeo = polygonGeo.Intersection(borderGeo)
+        intersected = ast.literal_eval(intersectedGeo.ExportToJson())
 
-    pixel_intersected = []
-    for pi in intersected['coordinates'][0]:
-        pixel_intersected.append((pi[0],pi[1]))
+        pixel_intersected = []
+        for pi in intersected['coordinates'][0]:
+            pixel_intersected.append((pi[0],pi[1]))
 
-    return pixel_intersected
+        return pixel_intersected
+    except Exception, e:
+        return None
+
 
 
 
